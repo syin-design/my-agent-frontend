@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 
-// 模拟 AI 回复（以后替换为真实 API）
-const mockReply = async (userMessage, config) => {
-  await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
-  return `这是对“${userMessage.slice(0, 20)}...”的模拟回复。\n\n目前前端已升级，你可以编辑设定、导入记录等。当接入真实 API 后，这里就会出现真正的 AI 回答。`;
-};
-
 // 全局样式字符串（避免 JSX 解析冲突）
 const globalStyles = `
   :root {
@@ -265,8 +259,16 @@ export default function App() {
       return { ...prev, [currentChatId]: { ...chat, messages: newMessages, history: newHistory, title: newTitle } };
     });
 
-    try {
-      const replyText = await mockReply(inputText, agentConfig);
+        try {
+      const response = await fetch('https://my-agent-backend-f3qq.onrender.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: inputText })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '请求失败');
+      const replyText = data.reply;
+
       const aiMsg = { role: 'ai', content: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
       setConversations(prev => {
         const chat = prev[currentChatId];
@@ -282,7 +284,7 @@ export default function App() {
       });
       speak(replyText);
     } catch (e) {
-      showToast('回复生成失败');
+      showToast('回复生成失败：' + e.message);
     }
     setIsTyping(false);
   };
