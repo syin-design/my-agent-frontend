@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 
-// 全局样式字符串（避免 JSX 解析冲突）
+// ========== 配置 ==========
+const BACKEND_URL = 'https://my-agent-backend-f3qq.onrender.com'; // ← 改成你自己的 Render 地址
+
+// ========== 全局样式 ==========
 const globalStyles = `
   :root {
     --bg-outer: #f5f0e9;
@@ -11,8 +14,6 @@ const globalStyles = `
     --border-subtle: rgba(180,170,158,0.3);
     --bubble-user: #e7efe3;
     --bubble-ai: rgba(255,252,248,0.85);
-    --shadow-soft: 0 2px 16px rgba(80,60,40,0.06);
-    --shadow-popup: 0 8px 32px rgba(80,60,40,0.1);
     --accent: #d4a5a5;
     --accent2: #c3bef0;
     --accent-warm: #e0c9b8;
@@ -56,27 +57,16 @@ const globalStyles = `
   * { margin:0; padding:0; box-sizing:border-box; }
   html { height:100%; -webkit-tap-highlight-color:transparent; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", sans-serif;
     height:100vh; height:100dvh; width:100vw; overflow:hidden; display:flex; justify-content:center; align-items:center;
     background: var(--bg-outer); transition: background 0.5s;
     font-size: calc(var(--font-size-base) * var(--ui-scale));
     user-select: none; -webkit-user-select: none;
   }
-  .bg-container {
-    position:fixed; top:0; left:0; right:0; bottom:0; z-index:-1; background-size:cover; background-position:center;
-    pointer-events:none;
-  }
+  .bg-container { position:fixed; top:0; left:0; right:0; bottom:0; z-index:-1; background-size:cover; background-position:center; pointer-events:none; }
   .bg-default { background: linear-gradient(175deg, #e8e0d5, #efe8dc, #f2ece2, #e5ddd3, #d9cfc3, #e3d9cb, #ece3d6, #f0e8db, #e8ddd0); }
-  .bg-default::before {
-    content:''; position:absolute; bottom:0; left:0; right:0; height:38%;
-    background: linear-gradient(180deg, transparent, rgba(230,218,205,0.3) 18%, rgba(215,200,182,0.5) 45%, rgba(200,185,165,0.65) 100%);
-    animation: mistFloat 10s ease-in-out infinite;
-  }
-  .bg-default::after {
-    content:''; position:absolute; bottom:8%; left:-3%; right:-3%; height:28%;
-    background: radial-gradient(ellipse at 35% 50%, rgba(255,250,242,0.45) 0%, transparent 58%);
-    animation: mistFloat2 14s ease-in-out infinite;
-  }
+  .bg-default::before { content:''; position:absolute; bottom:0; left:0; right:0; height:38%; background: linear-gradient(180deg, transparent, rgba(230,218,205,0.3) 18%, rgba(215,200,182,0.5) 45%, rgba(200,185,165,0.65) 100%); animation: mistFloat 10s ease-in-out infinite; }
+  .bg-default::after { content:''; position:absolute; bottom:8%; left:-3%; right:-3%; height:28%; background: radial-gradient(ellipse at 35% 50%, rgba(255,250,242,0.45) 0%, transparent 58%); animation: mistFloat2 14s ease-in-out infinite; }
   @keyframes mistFloat { 0%,100%{opacity:0.6;transform:translateX(0)} 50%{opacity:0.9;transform:translateX(18px)} }
   @keyframes mistFloat2 { 0%,100%{opacity:0.45;transform:translateX(0)} 50%{opacity:0.75;transform:translateX(-16px)} }
   .sidebar { position:fixed; left:0; top:0; bottom:0; width:275px; background:var(--sidebar-bg); backdrop-filter:blur(22px); z-index:50; transform:translateX(-100%); transition:0.32s; border-right:1px solid var(--border-subtle); border-radius:0 16px 16px 0; display:flex; flex-direction:column; }
@@ -86,9 +76,11 @@ const globalStyles = `
   .chat-list { flex:1; overflow-y:auto; padding:6px 8px; }
   .chat-item { padding:11px 12px; margin:3px 0; border-radius:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.9em; color:var(--text-primary); }
   .chat-item.active { background:var(--badge-bg); font-weight:500; }
-  .chat-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
-  .chat-delete { opacity:0.35; padding:4px 6px; border-radius:6px; }
-  .chat-delete:hover { opacity:1; background:rgba(200,100,80,0.12); color:#c06050; }
+  .chat-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; flex:1; }
+  .chat-item-actions { display:flex; gap:4px; opacity:0; transition:opacity 0.2s; }
+  .chat-item:hover .chat-item-actions { opacity:1; }
+  .chat-item-actions span { cursor:pointer; padding:2px 4px; border-radius:4px; font-size:0.8em; }
+  .chat-item-actions span:hover { background:rgba(0,0,0,0.08); }
   .memory-btn { margin:10px 12px; padding:10px; border-radius:12px; background:var(--sidebar-hover); color:var(--text-secondary); cursor:pointer; text-align:center; font-size:0.88em; }
   .memory-btn:hover { background:var(--badge-bg); color:var(--text-primary); }
   .sidebar-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:45; display:none; }
@@ -118,9 +110,6 @@ const globalStyles = `
   .ai-actions span:hover { opacity:1; }
   .typing-indicator { align-self:flex-start; padding:12px 16px; background:var(--bubble-ai); border-radius:18px; display:flex; gap:4px; border:1px solid var(--border-subtle); }
   .typing-indicator span { width:7px; height:7px; background:var(--text-tertiary); border-radius:50%; animation:typing 1.4s infinite; }
-  .typing-indicator span:nth-child(1) { animation-delay:0s; }
-  .typing-indicator span:nth-child(2) { animation-delay:0.2s; }
-  .typing-indicator span:nth-child(3) { animation-delay:0.4s; }
   @keyframes typing { 0%,80%,100%{transform:scale(0.6);opacity:0.35} 40%{transform:scale(1);opacity:1} }
   .input-area { display:flex; padding:8px 12px; background:var(--surface-header); backdrop-filter:blur(10px); border-top:1px solid var(--border-subtle); }
   #userInput { flex:1; padding:10px 15px; border:1.5px solid var(--input-border); border-radius:22px; background:var(--input-bg); resize:none; font-family:inherit; font-size:0.94em; color:var(--text-primary); }
@@ -142,87 +131,81 @@ const globalStyles = `
 `;
 
 export default function App() {
-  // ==================== 状态 ====================
-  const [agentConfig, setAgentConfig] = useState(() => {
+  // ========== 状态 ==========
+  const [agentConfig] = useState(() => {
     const saved = localStorage.getItem('ins_agent_config');
     return saved ? JSON.parse(saved) : {
-      name: '智能体',
-      prompt: '你是一个贴心、知识渊博的AI助手，回答简洁生动，富有温度。',
-      voiceIndex: 0,
-      autoSpeak: true,
-      maxTokens: 1024,
-      temperature: 0.7,
-      avatar: null,
+      name: '智能体', prompt: '你是一个贴心、知识渊博的AI助手，回答简洁生动，富有温度。',
+      voiceIndex: 0, autoSpeak: true, avatar: null,
     };
   });
-  const [conversations, setConversations] = useState(() => {
-    const saved = localStorage.getItem('ins_conversations');
-    return saved ? JSON.parse(saved) : {};
-  });
-  const [currentChatId, setCurrentChatId] = useState(() => {
-    const savedId = localStorage.getItem('ins_currentChatId');
-    // 注意：此时 conversations 已经是初始化后的值，可直接使用
-    if (savedId && conversations[savedId]) return savedId;
-    const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
-    // 添加初始对话
-    conversations[id] = { title: '新对话', messages: [], history: [] };
-    return id;
-  });
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [theme, setTheme] = useState(() => localStorage.getItem('ins_theme') || 'light');
-  const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('ins_uiScale')) || 1);
-  const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem('ins_fontSize')) || 15);
   const [customBg, setCustomBg] = useState(() => localStorage.getItem('ins_customBg') || null);
-  const [appWidth, setAppWidth] = useState(() => parseInt(localStorage.getItem('ins_appWidth')) || 520);
-  const [appHeight, setAppHeight] = useState(() => parseInt(localStorage.getItem('ins_appHeight')) || 700);
   const [editMsg, setEditMsg] = useState(null);
   const [editText, setEditText] = useState('');
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
-  const abortControllerRef = useRef(null);
 
   // 声音
   const [voices, setVoices] = useState([]);
   useEffect(() => {
-    const loadVoices = () => {
-      const v = speechSynthesis.getVoices();
-      if (v.length) setVoices(v);
-    };
+    const loadVoices = () => { const v = speechSynthesis.getVoices(); if (v.length) setVoices(v); };
     loadVoices();
     speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
 
-  // 持久化
-  useEffect(() => { localStorage.setItem('ins_agent_config', JSON.stringify(agentConfig)); }, [agentConfig]);
-  useEffect(() => { localStorage.setItem('ins_conversations', JSON.stringify(conversations)); }, [conversations]);
-  useEffect(() => { localStorage.setItem('ins_currentChatId', currentChatId); }, [currentChatId]);
   useEffect(() => { localStorage.setItem('ins_theme', theme); document.documentElement.setAttribute('data-theme', theme); }, [theme]);
-  useEffect(() => {
-    document.documentElement.style.setProperty('--ui-scale', uiScale);
-    document.documentElement.style.setProperty('--font-size-base', fontSize + 'px');
-    localStorage.setItem('ins_uiScale', uiScale);
-    localStorage.setItem('ins_fontSize', fontSize);
-  }, [uiScale, fontSize]);
-  useEffect(() => {
-    if (customBg) localStorage.setItem('ins_customBg', customBg);
-    else localStorage.removeItem('ins_customBg');
-  }, [customBg]);
-  useEffect(() => { localStorage.setItem('ins_appWidth', appWidth); localStorage.setItem('ins_appHeight', appHeight); }, [appWidth, appHeight]);
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversations[currentChatId]?.messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const showToast = (msg) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(''), 2100);
+  // ========== 加载会话列表 ==========
+  const loadSessions = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/sessions`);
+      const data = await res.json();
+      if (data.sessions) {
+        setSessions(data.sessions);
+        if (data.sessions.length > 0 && !currentSessionId) {
+          setCurrentSessionId(data.sessions[0].id);
+        }
+      }
+    } catch (e) {
+      console.error('加载会话列表失败:', e);
+    }
   };
 
+  // ========== 加载消息 ==========
+  const loadMessages = async (sessionId) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/messages/${sessionId}`);
+      const data = await res.json();
+      if (data.messages) {
+        setMessages(data.messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        })));
+      }
+    } catch (e) {
+      console.error('加载消息失败:', e);
+    }
+  };
+
+  useEffect(() => { loadSessions(); }, []);
+  useEffect(() => { if (currentSessionId) loadMessages(currentSessionId); }, [currentSessionId]);
+
+  // ========== 工具函数 ==========
+  const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 2100); };
   const speak = (text) => {
     if (!agentConfig.autoSpeak) return;
     speechSynthesis.cancel();
@@ -230,228 +213,153 @@ export default function App() {
     if (!cleaned || cleaned.length > 2000) return;
     const u = new SpeechSynthesisUtterance(cleaned);
     if (voices[agentConfig.voiceIndex]) u.voice = voices[agentConfig.voiceIndex];
-    u.rate = 1.0; u.volume = 0.9;
-    speechSynthesis.speak(u);
+    u.rate = 1.0; u.volume = 0.9; speechSynthesis.speak(u);
   };
 
+  // ========== 新建会话 ==========
   const createNewChat = () => {
-    const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
-    setConversations(prev => ({ ...prev, [id]: { title: '新对话', messages: [], history: [] } }));
-    setCurrentChatId(id);
+    setCurrentSessionId(null);
+    setMessages([]);
     setSidebarOpen(false);
-    showToast('✨ 新对话已创建');
+    showToast('✨ 新对话已创建，发送第一条消息后将自动保存');
   };
 
-  // 发送消息（完全函数式更新）
+  // ========== 发送消息 ==========
   const sendMessage = async (text = null) => {
     const inputText = text || document.getElementById('userInput')?.value.trim();
     if (!inputText || isTyping) return;
     document.getElementById('userInput').value = '';
     setIsTyping(true);
 
-    // 先添加用户消息
-    setConversations(prev => {
-      const chat = prev[currentChatId] || { messages: [], history: [], title: '新对话' };
-      const userMsg = { role: 'user', content: inputText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-      const newMessages = [...chat.messages, userMsg];
-      const newHistory = [...chat.history, { role: 'user', content: inputText }];
-      const newTitle = chat.messages.length === 0 ? inputText.slice(0, 25) + (inputText.length > 25 ? '...' : '') : chat.title;
-      return { ...prev, [currentChatId]: { ...chat, messages: newMessages, history: newHistory, title: newTitle } };
-    });
+    const userMsg = { role: 'user', content: inputText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    setMessages(prev => [...prev, userMsg]);
 
-        try {
-      const response = await fetch('https://my-agent-backend-f3qq.onrender.com/api/chat', {
+    try {
+      const body = { message: inputText };
+      if (currentSessionId) body.sessionId = currentSessionId;
+
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: inputText })
+        body: JSON.stringify(body)
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || '请求失败');
-      const replyText = data.reply;
 
-      const aiMsg = { role: 'ai', content: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-      setConversations(prev => {
-        const chat = prev[currentChatId];
-        if (!chat) return prev;
-        return {
-          ...prev,
-          [currentChatId]: {
-            ...chat,
-            messages: [...chat.messages, aiMsg],
-            history: [...chat.history, { role: 'assistant', content: replyText }],
-          }
-        };
-      });
-      speak(replyText);
+      const aiMsg = { role: 'ai', content: data.reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+      setMessages(prev => [...prev, aiMsg]);
+
+      if (data.sessionId && !currentSessionId) {
+        setCurrentSessionId(data.sessionId);
+        loadSessions();
+      }
+
+      speak(data.reply);
     } catch (e) {
       showToast('回复生成失败：' + e.message);
     }
     setIsTyping(false);
   };
 
+  // ========== 重新生成 ==========
   const regenerate = async () => {
-    if (isTyping) return;
+    const userMsgs = messages.filter(m => m.role === 'user');
+    if (userMsgs.length === 0) return;
+    const lastUserMsg = userMsgs[userMsgs.length - 1];
+    setMessages(prev => prev.slice(0, -1));
     setIsTyping(true);
-    let userContent = '';
-    setConversations(prev => {
-      const chat = prev[currentChatId];
-      if (!chat) return prev;
-      const msgs = chat.messages;
-      const lastAiIdx = msgs.map((m, i) => m.role === 'ai' ? i : -1).filter(i => i !== -1).pop();
-      if (lastAiIdx === undefined) return prev;
-      const newMsgs = msgs.slice(0, lastAiIdx);
-      const userMsg = newMsgs[newMsgs.length - 1];
-      if (!userMsg || userMsg.role !== 'user') return prev;
-      userContent = userMsg.content;
-      const newHistory = chat.history.slice(0, lastAiIdx);
-      return { ...prev, [currentChatId]: { ...chat, messages: newMsgs, history: newHistory } };
-    });
-    if (userContent) await sendMessage(userContent);
-    else setIsTyping(false);
+    try {
+      const body = { message: lastUserMsg.content };
+      if (currentSessionId) body.sessionId = currentSessionId;
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '请求失败');
+      const aiMsg = { role: 'ai', content: data.reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+      setMessages(prev => [...prev, aiMsg]);
+      speak(data.reply);
+    } catch (e) {
+      showToast('重新生成失败：' + e.message);
+    }
+    setIsTyping(false);
   };
 
-  const handleEdit = (msg) => {
-    setEditMsg(msg);
-    setEditText(msg.content);
-  };
-
+  // ========== 编辑用户消息 ==========
+  const handleEdit = (msg) => { setEditMsg(msg); setEditText(msg.content); };
   const submitEdit = async () => {
     if (!editMsg || !editText.trim()) return;
-    // 截断消息列表到该消息之前
-    setConversations(prev => {
-      const chat = prev[currentChatId];
-      if (!chat) return prev;
-      const idx = chat.messages.indexOf(editMsg);
-      if (idx === -1) return prev;
-      const newMessages = chat.messages.slice(0, idx);
-      const newHistory = chat.history.slice(0, idx);
-      return { ...prev, [currentChatId]: { ...chat, messages: newMessages, history: newHistory } };
-    });
+    const idx = messages.indexOf(editMsg);
+    if (idx >= 0) setMessages(prev => prev.slice(0, idx));
     setEditMsg(null);
     await sendMessage(editText.trim());
   };
 
-  const deleteChat = (id) => {
-    setConversations(prev => {
-      if (Object.keys(prev).length <= 1) {
-        showToast('至少保留一个对话');
-        return prev;
-      }
-      const copy = { ...prev };
-      delete copy[id];
-      return copy;
-    });
-    if (currentChatId === id) {
-      const remaining = Object.keys(conversations).filter(k => k !== id);
-      if (remaining.length > 0) setCurrentChatId(remaining[0]);
+  // ========== 删除会话 ==========
+  const deleteChat = async (id) => {
+    if (!confirm('确定要删除这个对话吗？')) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/sessions/${id}`, { method: 'DELETE' });
+      if (currentSessionId === id) { setCurrentSessionId(null); setMessages([]); }
+      loadSessions();
+      showToast('对话已删除');
+    } catch (e) {
+      showToast('删除失败');
     }
-    showToast('对话已删除');
   };
 
+  // ========== 重命名会话 ==========
+  const renameChat = async (id) => {
+    const name = prompt('请输入新名称：');
+    if (!name) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/sessions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      loadSessions();
+      showToast('已重命名');
+    } catch (e) {
+      showToast('重命名失败');
+    }
+  };
+
+  // ========== 导入文件 ==========
   const handleFileImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
-        let messages = [];
         const content = ev.target.result;
-        if (file.name.endsWith('.json')) {
-          const data = JSON.parse(content);
-          if (Array.isArray(data)) messages = data;
-        } else {
-          const lines = content.split('\n').filter(l => l.trim());
-          for (const line of lines) {
-            if (line.startsWith('用户:') || line.startsWith('user:'))
-              messages.push({ role: 'user', content: line.replace(/^(用户:|user:)\s*/i, '') });
-            else if (line.startsWith('AI:') || line.startsWith('ai:'))
-              messages.push({ role: 'ai', content: line.replace(/^(AI:|ai:)\s*/i, '') });
-          }
+        const lines = content.split('\n').filter(l => l.trim());
+        const importedMessages = [];
+        for (const line of lines) {
+          if (line.startsWith('用户:') || line.startsWith('user:'))
+            importedMessages.push({ role: 'user', content: line.replace(/^(用户:|user:)\s*/i, '') });
+          else if (line.startsWith('AI:') || line.startsWith('ai:'))
+            importedMessages.push({ role: 'ai', content: line.replace(/^(AI:|ai:)\s*/i, '') });
         }
-        if (messages.length === 0) { showToast('未识别到任何聊天记录'); return; }
-        const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
-        const newChat = {
-          title: `导入记录 ${new Date().toLocaleDateString()}`,
-          messages: messages.map(m => ({ ...m, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })),
-          history: messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
-        };
-        setConversations(prev => ({ ...prev, [id]: newChat }));
-        setCurrentChatId(id);
-        showToast(`成功导入 ${messages.length} 条记录`);
-      } catch (err) {
-        showToast('文件解析失败，请检查格式');
-      }
+        if (importedMessages.length === 0) { showToast('未识别到聊天记录'); return; }
+        setMessages(importedMessages.map(m => ({
+          ...m,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        })));
+        showToast(`已导入 ${importedMessages.length} 条记录（仅本地预览）`);
+      } catch (err) { showToast('文件解析失败'); }
     };
     reader.readAsText(file);
     e.target.value = '';
   };
 
+  // ========== 记忆库 ==========
   const openMemory = () => { setMemoryOpen(true); setSidebarOpen(false); };
   const closeMemory = () => setMemoryOpen(false);
 
-  const saveSettings = () => {
-    const name = document.getElementById('setName')?.value.trim() || agentConfig.name;
-    const prompt = document.getElementById('setPrompt')?.value.trim() || agentConfig.prompt;
-    const autoSpeak = document.getElementById('setAutoSpeak')?.checked ?? agentConfig.autoSpeak;
-    const maxTokens = parseInt(document.getElementById('setMaxTokens')?.value) || 1024;
-    const temperature = parseFloat(document.getElementById('setTemperature')?.value) || 0.7;
-    const voiceIdx = parseInt(document.getElementById('setVoice')?.value) || 0;
-    const scale = parseFloat(document.getElementById('setScale')?.value) || 1;
-    const size = parseInt(document.getElementById('setFontSize')?.value) || 15;
-    setAgentConfig(prev => ({ ...prev, name, prompt, autoSpeak, maxTokens, temperature, voiceIndex: voiceIdx }));
-    setUiScale(scale);
-    setFontSize(size);
-    const bgFile = document.getElementById('bgFileInput')?.files[0];
-    if (bgFile) {
-      const reader = new FileReader();
-      reader.onload = () => setCustomBg(reader.result);
-      reader.readAsDataURL(bgFile);
-    }
-    setSettingsOpen(false);
-    showToast('✅ 设定已保存');
-  };
-
-  const clearConversation = () => {
-    if (isTyping) { showToast('请先停止生成'); return; }
-    setConversations(prev => ({
-      ...prev,
-      [currentChatId]: { title: '新对话', messages: [], history: [] }
-    }));
-    setSettingsOpen(false);
-    showToast('🗑️ 对话已清空');
-    setTimeout(() => {
-      const aiMsg = { role: 'ai', content: '嗨！我是你的智能助手，有什么想聊的吗？🌿', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-      setConversations(prev => {
-        const chat = prev[currentChatId] || { messages: [], history: [] };
-        return {
-          ...prev,
-          [currentChatId]: { ...chat, messages: [aiMsg], history: [{ role: 'assistant', content: aiMsg.content }] }
-        };
-      });
-    }, 300);
-  };
-
-  const resizeStart = (e) => {
-    if (window.innerWidth < 768) return;
-    const startX = e.clientX, startY = e.clientY, w = appWidth, h = appHeight;
-    const onMove = (ev) => {
-      const newW = Math.max(340, Math.min(900, w + ev.clientX - startX));
-      const newH = Math.max(420, Math.min(window.innerHeight * 0.92, h + ev.clientY - startY));
-      setAppWidth(newW);
-      setAppHeight(newH);
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    e.preventDefault();
-  };
-
-  // 当前对话（用于渲染，但操作已全部函数式，此处仅读取）
-  const chat = conversations[currentChatId] || { messages: [], history: [], title: '新对话' };
-
+  // ========== 渲染 ==========
   return (
     <>
       <div className="bg-container bg-default" style={{ backgroundImage: customBg ? `url(${customBg})` : undefined }} />
@@ -462,47 +370,38 @@ export default function App() {
           <button className="new-chat-btn" onClick={createNewChat}>＋ 新对话</button>
         </div>
         <div className="chat-list">
-          {Object.entries(conversations).map(([id, c]) => (
-            <div key={id} className={`chat-item ${id === currentChatId ? 'active' : ''}`}>
-              <span className="chat-title" onClick={() => { setCurrentChatId(id); setSidebarOpen(false); }}>{c.title}</span>
-              <span className="chat-delete" onClick={(e) => { e.stopPropagation(); deleteChat(id); }}>🗑️</span>
+          {sessions.map(s => (
+            <div key={s.id} className={`chat-item ${s.id === currentSessionId ? 'active' : ''}`}>
+              <span className="chat-title" onClick={() => setCurrentSessionId(s.id)}>{s.name}</span>
+              <span className="chat-item-actions">
+                <span onClick={(e) => { e.stopPropagation(); renameChat(s.id); }}>✏️</span>
+                <span onClick={(e) => { e.stopPropagation(); deleteChat(s.id); }}>🗑️</span>
+              </span>
             </div>
           ))}
         </div>
-        <div className="memory-btn" onClick={openMemory}>📚 记忆库 · 浏览全部记录</div>
+        <div className="memory-btn" onClick={openMemory}>📚 记忆库</div>
         <div className="memory-btn" onClick={() => fileInputRef.current?.click()}>📥 导入聊天记录</div>
         <input type="file" ref={fileInputRef} accept=".txt,.json" style={{ display: 'none' }} onChange={handleFileImport} />
       </div>
 
-      <div className="app-container" style={{ width: window.innerWidth >= 768 ? appWidth : '100%', height: window.innerWidth >= 768 ? appHeight : '100dvh' }}>
-        {window.innerWidth >= 768 && <div className="resize-handle" onMouseDown={resizeStart} />}
+      <div className="app-container">
         <div className="header">
           <span className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</span>
           <div className="avatar-wrapper" onClick={() => avatarInputRef.current?.click()}>
-            <div className="avatar" id="avatarDisplay">
-              {agentConfig.avatar ? <img src={agentConfig.avatar} alt="头像" /> : '🤖'}
-            </div>
+            <div className="avatar">{agentConfig.avatar ? <img src={agentConfig.avatar} alt="头像" /> : '🤖'}</div>
             <div className="avatar-edit-badge">✎</div>
           </div>
-          <div className="header-info">
-            <span className="header-name">{agentConfig.name}</span>
-            <span className="header-desc"> </span>
-          </div>
-          <span className="theme-toggle-btn" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="切换主题">🌓</span>
-          <span className="theme-toggle-btn" onClick={() => setSettingsOpen(true)} title="设置" style={{ fontSize: '1.3em', marginLeft: 4 }}>⚙️</span>
+          <div className="header-info"><span className="header-name">{agentConfig.name}</span></div>
+          <span className="theme-toggle-btn" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>🌓</span>
+          <span className="theme-toggle-btn" onClick={() => setSettingsOpen(true)} style={{ fontSize: '1.3em', marginLeft: 4 }}>⚙️</span>
         </div>
 
         <div className="messages">
-          {chat.messages.map((msg, idx) => (
+          {messages.map((msg, idx) => (
             <div key={idx}>
               <div className={`msg-wrapper ${msg.role}`}>
-                <div
-                  className="msg-bubble"
-                  style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
-                  onClick={() => msg.role === 'user' && handleEdit(msg)}
-                >
-                  {msg.content}
-                </div>
+                <div className="msg-bubble" style={{ userSelect: 'text', WebkitUserSelect: 'text' }} onClick={() => msg.role === 'user' && handleEdit(msg)}>{msg.content}</div>
                 <div className="msg-time">{msg.time}</div>
               </div>
               {msg.role === 'ai' && (
@@ -524,63 +423,37 @@ export default function App() {
         </div>
       </div>
 
-      {/* 记忆库弹窗 */}
       {memoryOpen && (
         <div className="memory-overlay" onClick={closeMemory}>
-          <div className="memory-panel" onClick={(e) => e.stopPropagation()}>
-            <h3>📚 所有对话记录</h3>
-            {Object.keys(conversations).length === 0 ? <p>暂无记录</p> : (
-              Object.entries(conversations).map(([id, c]) => (
-                <details key={id}>
-                  <summary>{c.title} ({c.messages.length}条消息)</summary>
-                  <div style={{ maxHeight: 180, overflowY: 'auto' }}>
-                    {c.messages.map((m, i) => (
-                      <p key={i}><b>{m.role === 'user' ? '🧑 我' : '🤖 AI'}:</b> {m.content.slice(0, 120)}{m.content.length > 120 ? '...' : ''}</p>
-                    ))}
-                  </div>
-                </details>
+          <div className="memory-panel" onClick={e => e.stopPropagation()}>
+            <h3>📚 会话列表</h3>
+            {sessions.length === 0 ? <p>暂无记录</p> :
+              sessions.map(s => (
+                <div key={s.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--divider)', cursor: 'pointer' }} onClick={() => { setCurrentSessionId(s.id); closeMemory(); }}>
+                  {s.name} <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8em' }}>({new Date(s.updated_at).toLocaleDateString()})</span>
+                </div>
               ))
-            )}
+            }
             <button className="modal-btn secondary" onClick={closeMemory} style={{ marginTop: 16 }}>关闭</button>
           </div>
         </div>
       )}
 
-      {/* 设置弹窗 */}
       {settingsOpen && (
         <div className="modal-overlay" onClick={() => setSettingsOpen(false)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
             <h3>⚙️ 智能体设置</h3>
-            <div className="avatar-upload-section">
-              <div className="avatar-upload-preview" onClick={() => avatarInputRef.current?.click()}>
-                {agentConfig.avatar ? <img src={agentConfig.avatar} alt="头像" /> : '🤖'}
-              </div>
-              <button className="avatar-upload-btn" onClick={() => avatarInputRef.current?.click()}>📷 上传头像</button>
-            </div>
-            <div className="modal-field"><label>智能体名字</label><input type="text" id="setName" defaultValue={agentConfig.name} /></div>
-            <div className="modal-field"><label>系统提示词</label><textarea id="setPrompt" rows="3" defaultValue={agentConfig.prompt} /></div>
-            <div className="modal-field"><label>语音选择</label><select id="setVoice" defaultValue={agentConfig.voiceIndex}>
-              {voices.map((v, i) => <option key={i} value={i}>{v.name} ({v.lang})</option>)}
-            </select></div>
-            <div className="modal-field"><label><input type="checkbox" id="setAutoSpeak" defaultChecked={agentConfig.autoSpeak} /> 自动朗读AI回复</label></div>
-            <div className="modal-field"><label>最大回复长度 (tokens)</label><input type="number" id="setMaxTokens" defaultValue={agentConfig.maxTokens} /></div>
-            <div className="modal-field"><label>温度 <span id="tempVal">{agentConfig.temperature}</span></label><input type="range" id="setTemperature" min="0" max="1" step="0.05" defaultValue={agentConfig.temperature} onChange={(e) => document.getElementById('tempVal').textContent = e.target.value} /></div>
-            <div className="modal-field"><label>界面缩放 <span id="scaleVal">{uiScale.toFixed(2)}</span></label><input type="range" id="setScale" min="0.8" max="1.5" step="0.05" defaultValue={uiScale} onChange={(e) => document.getElementById('scaleVal').textContent = parseFloat(e.target.value).toFixed(2)} /></div>
-            <div className="modal-field"><label>字号 <span id="fontSizeVal">{fontSize}px</span></label><input type="range" id="setFontSize" min="12" max="22" step="1" defaultValue={fontSize} onChange={(e) => document.getElementById('fontSizeVal').textContent = e.target.value + 'px'} /></div>
-            <div className="modal-field"><label>自定义背景图片</label><input type="file" id="bgFileInput" accept="image/*" /></div>
-            <button className="modal-btn primary" onClick={saveSettings}>💾 保存设定</button>
-            <button className="modal-btn danger" onClick={clearConversation}>🗑️ 清空当前对话</button>
-            <button className="modal-btn secondary" onClick={() => setSettingsOpen(false)}>取消</button>
+            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 20 }}>设置功能即将上线</p>
+            <button className="modal-btn secondary" onClick={() => setSettingsOpen(false)} style={{ marginTop: 16 }}>关闭</button>
           </div>
         </div>
       )}
 
-      {/* 编辑消息弹窗 */}
       {editMsg && (
         <div className="modal-overlay" onClick={() => setEditMsg(null)}>
-          <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
             <h3>✏️ 编辑消息</h3>
-            <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={3} />
+            <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3} />
             <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
               <button className="modal-btn primary" onClick={submitEdit}>保存并重发</button>
               <button className="modal-btn secondary" onClick={() => setEditMsg(null)}>取消</button>
@@ -590,27 +463,21 @@ export default function App() {
       )}
 
       <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={(e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const max = 200;
+          const img = new Image(); img.onload = () => {
+            const canvas = document.createElement('canvas'); const max = 200;
             let w = img.width, h = img.height;
             if (w > h) { if (w > max) { h = h * max / w; w = max; } } else { if (h > max) { w = w * max / h; h = max; } }
             canvas.width = Math.round(w); canvas.height = Math.round(h);
             canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            setAgentConfig(prev => ({ ...prev, avatar: canvas.toDataURL('image/jpeg', 0.8) }));
-          };
-          img.src = ev.target.result;
-        };
-        reader.readAsDataURL(file);
+            localStorage.setItem('ins_agent_config', JSON.stringify({ ...agentConfig, avatar: canvas.toDataURL('image/jpeg', 0.8) }));
+          }; img.src = ev.target.result;
+        }; reader.readAsDataURL(file);
       }} />
 
       {toastMsg && <div className="toast show">{toastMsg}</div>}
-
       <style>{globalStyles}</style>
     </>
   );
