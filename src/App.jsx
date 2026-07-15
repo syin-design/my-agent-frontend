@@ -429,27 +429,51 @@ export default function App() {
   const openMemory = () => { setMemoryOpen(true); setSidebarOpen(false); };
   const closeMemory = () => setMemoryOpen(false);
 
-  const saveSettings = () => {
-    const name = document.getElementById('setName')?.value.trim() || agentConfig.name;
-    const prompt = document.getElementById('setPrompt')?.value.trim() || agentConfig.prompt;
-    const autoSpeak = document.getElementById('setAutoSpeak')?.checked ?? agentConfig.autoSpeak;
-    const maxTokens = parseInt(document.getElementById('setMaxTokens')?.value) || 1024;
-    const temperature = parseFloat(document.getElementById('setTemperature')?.value) || 0.7;
-    const voiceIdx = parseInt(document.getElementById('setVoice')?.value) || 0;
-    const scale = parseFloat(document.getElementById('setScale')?.value) || 1;
-    const size = parseInt(document.getElementById('setFontSize')?.value) || 15;
-    setAgentConfig(prev => ({ ...prev, name, prompt, autoSpeak, maxTokens, temperature, voiceIndex: voiceIdx }));
-    setUiScale(scale);
-    setFontSize(size);
-    const bgFile = document.getElementById('bgFileInput')?.files[0];
-    if (bgFile) {
-      const reader = new FileReader();
-      reader.onload = () => setCustomBg(reader.result);
-      reader.readAsDataURL(bgFile);
-    }
+  const saveSettings = async () => {
+  const name = document.getElementById('setName')?.value.trim() || agentConfig.name;
+  const prompt = document.getElementById('setPrompt')?.value.trim() || agentConfig.prompt;
+  const autoSpeak = document.getElementById('setAutoSpeak')?.checked ?? agentConfig.autoSpeak;
+  const maxTokens = parseInt(document.getElementById('setMaxTokens')?.value) || 1024;
+  const temperature = parseFloat(document.getElementById('setTemperature')?.value) || 0.7;
+  const voiceIdx = parseInt(document.getElementById('setVoice')?.value) || 0;
+  const scale = parseFloat(document.getElementById('setScale')?.value) || 1;
+  const size = parseInt(document.getElementById('setFontSize')?.value) || 15;
+
+  // 更新本地状态
+  setAgentConfig(prev => ({ ...prev, name, prompt, autoSpeak, maxTokens, temperature, voiceIndex: voiceIdx }));
+  setUiScale(scale);
+  setFontSize(size);
+
+  // 同步到后端数据库（新增）
+  try {
+    await fetch(`${BACKEND_URL}/api/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_prompt: prompt,
+        temperature: temperature,
+        max_context_rounds: 20,        // 保持默认，可按需扩展
+        max_reply_tokens: maxTokens
+      })
+    });
+  } catch (e) {
+    console.error('同步设置到后端失败:', e);
+    showToast('⚠️ 本地已保存，但云端同步失败');
     setSettingsOpen(false);
-    showToast('✅ 设定已保存');
-  };
+    return;
+  }
+
+  // 背景图片处理（保留原有逻辑）
+  const bgFile = document.getElementById('bgFileInput')?.files[0];
+  if (bgFile) {
+    const reader = new FileReader();
+    reader.onload = () => setCustomBg(reader.result);
+    reader.readAsDataURL(bgFile);
+  }
+
+  setSettingsOpen(false);
+  showToast('✅ 设定已保存并同步到云端');
+};
 
   const clearConversation = () => {
     if (isTyping) { showToast('请先停止生成'); return; }
