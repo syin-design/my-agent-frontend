@@ -252,16 +252,34 @@ export default function App() {
     setTimeout(() => setToastMsg(''), 2100);
   };
 
-  const speak = (text) => {
-    if (!agentConfig.autoSpeak) return;
-    speechSynthesis.cancel();
-    const cleaned = text.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').replace(/\s+/g, ' ').trim();
-    if (!cleaned || cleaned.length > 2000) return;
-    const u = new SpeechSynthesisUtterance(cleaned);
+  const speak = async (text) => {
+  if (!agentConfig.autoSpeak) return;
+  if (!text || text.length > 1000) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+
+    // 播放 base64 音频
+    const binary = atob(data.audio);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/mp3' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play();
+  } catch (e) {
+    console.error('TTS 播放失败:', e);
+    // 兜底：浏览器自带语音
+    const u = new SpeechSynthesisUtterance(text);
     if (voices[agentConfig.voiceIndex]) u.voice = voices[agentConfig.voiceIndex];
-    u.rate = 1.0; u.volume = 0.9;
     speechSynthesis.speak(u);
-  };
+  }
+};
 
   const createNewChat = () => {
     setCurrentChatId(null);
