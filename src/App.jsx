@@ -262,18 +262,40 @@ export default function App() {
       body: JSON.stringify({ text })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
+    if (!response.ok) throw new Error(data.error || 'TTS 请求失败');
 
-    // 播放 base64 音频
+    // 将 base64 解码为字节数组
     const binary = atob(data.audio);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: 'audio/mp3' });
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.play();
+
+    // 使用 Web Audio API 播放 PCM 数据
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const sampleRate = data.sampleRate || 24000;
+    const channels = data.channels || 1;
+    const bitDepth = data.bitDepth || 16;
+
+    // 计算采样点数
+    const numSamples = Math.floor(bytes.length / (bitDepth / 8)) / channels;
+    const audioBuffer = audioCtx.createBuffer(channels, numSamples, sampleRate);
+
+    // 将 16-bit PCM 转为 Float32Array 填充到音频缓冲区
+    for (let ch = 0; ch < channels; ch++) {
+      const channelData = audioBuffer.getChannelData(ch);
+      for (let i = 0; i < numSamples; i++) {
+        const offset = (i * channels + ch) * (bitDepth / 8);
+        // 16-bit little-endian
+        const sample = (bytes[offset + 1] << 8) | bytes[offset];
+        channelData[i] = sample / 32768; // 归一化到 [-1, 1]
+      }
+    }
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioCtx.destination);
+    source.start();
   } catch (e) {
-    console.error('TTS 播放失败:', e);
+    console.error('语音播放失败:', e);
     // 兜底：浏览器自带语音
     const u = new SpeechSynthesisUtterance(text);
     if (voices[agentConfig.voiceIndex]) u.voice = voices[agentConfig.voiceIndex];
