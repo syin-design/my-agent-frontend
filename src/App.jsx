@@ -309,7 +309,7 @@ export default function App() {
     showToast('✨ 新对话已创建，发送第一条消息后将自动保存');
   };
 
-  // ========== 发送消息（调用后端，带 sessionId）==========
+    // ========== 发送消息（调用后端，流式接收）==========
   const sendMessage = async (text = null) => {
     const inputText = text || document.getElementById('userInput')?.value.trim();
     if (!inputText || isTyping) return;
@@ -332,31 +332,61 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '请求失败');
-      const replyText = data.reply;
 
-      const aiMsg = { role: 'ai', content: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || '请求失败');
+      }
+
+      // ----- 流式读取 SSE 响应 -----
+      // 先添加一个空的 AI 消息占位
+      const aiMsg = { role: 'ai', content: '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
       setConversations(prev => {
         const chat = prev[currentChatId || 'temp'] || { messages: [], history: [] };
         return { ...prev, [currentChatId || 'temp']: { ...chat, messages: [...chat.messages, aiMsg] } };
       });
 
-      // 如果后端返回了新的 sessionId
-      if (data.sessionId && !currentChatId) {
-        setCurrentChatId(data.sessionId);
-        // 把临时消息迁移到正式 sessionId
-        setConversations(prev => {
-          const temp = prev['temp'];
-          if (!temp) return prev;
-          const newConv = { ...prev, [data.sessionId]: temp };
-          delete newConv['temp'];
-          return newConv;
-        });
-        loadDbSessions();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullReply = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(l => l.startsWith('data:'));
+        for (const line of lines) {
+          const json = line.slice(5).trim();
+          if (json === '[DONE]') break;
+          try {
+            const data = JSON.parse(json);
+            if (data.delta) {
+              fullReply += data.delta;
+              // 实时更新最后一条 AI 消息的内容
+              setConversations(prev => {
+                const chat = prev[currentChatId || 'temp'] || { messages: [], history: [] };
+                const updatedMessages = [...chat.messages];
+                const lastIdx = updatedMessages.length - 1;
+                if (lastIdx >= 0) {
+                  updatedMessages[lastIdx] = { ...updatedMessages[lastIdx], content: fullReply };
+                }
+                return { ...prev, [currentChatId || 'temp']]: { ...chat, messages: updatedMessages } };
+              });
+            }
+          } catch (e) { /* 忽略解析错误 */ }
+        }
       }
 
-      speak(replyText);
+      // 流式结束后，保存完整回复到 history
+      setConversations(prev => {
+        const chat = prev[currentChatId || 'temp'] || { history: [] };
+        return { ...prev, [currentChatId || 'temp']: { ...chat, history: [...chat.history, { role: 'assistant', content: fullReply }] } };
+      });
+
+      // 如果后端返回了新的 sessionId（首次创建会话）
+      // 注意：流式模式下 sessionId 不在 JSON 中返回，后端已自动创建，无需额外处理
+
+      speak(fullReply);
     } catch (e) {
       showToast('回复生成失败：' + e.message);
     }
