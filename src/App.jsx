@@ -309,7 +309,7 @@ export default function App() {
     showToast('✨ 新对话已创建，发送第一条消息后将自动保存');
   };
 
-    // ========== 发送消息（调用后端，流式接收）==========
+      // ========== 发送消息（调用后端，流式接收）==========
   const sendMessage = async (text = null) => {
     const inputText = text || document.getElementById('userInput')?.value.trim();
     if (!inputText || isTyping) return;
@@ -338,7 +338,6 @@ export default function App() {
         throw new Error(errData.error || '请求失败');
       }
 
-      // ----- 流式读取 SSE 响应 -----
       // 先添加一个空的 AI 消息占位
       const aiMsg = { role: 'ai', content: '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
       setConversations(prev => {
@@ -370,7 +369,8 @@ export default function App() {
                 if (lastIdx >= 0) {
                   updatedMessages[lastIdx] = { ...updatedMessages[lastIdx], content: fullReply };
                 }
-                return { ...prev, [currentChatId || 'temp']]: { ...chat, messages: updatedMessages } };
+                // 修复点：这里少了一个 ]，正确写法如下
+                return { ...prev, [currentChatId || 'temp']: { ...chat, messages: updatedMessages } };
               });
             }
           } catch (e) { /* 忽略解析错误 */ }
@@ -382,9 +382,6 @@ export default function App() {
         const chat = prev[currentChatId || 'temp'] || { history: [] };
         return { ...prev, [currentChatId || 'temp']: { ...chat, history: [...chat.history, { role: 'assistant', content: fullReply }] } };
       });
-
-      // 如果后端返回了新的 sessionId（首次创建会话）
-      // 注意：流式模式下 sessionId 不在 JSON 中返回，后端已自动创建，无需额外处理
 
       speak(fullReply);
     } catch (e) {
