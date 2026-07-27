@@ -324,7 +324,10 @@ export default function App() {
     });
 
     try {
-      const body = { message: inputText };
+      const body = {
+  message: inputText,
+  model: agentConfig.model || 'doubao'   // 新增：默认豆包
+};
       if (currentChatId) body.sessionId = currentChatId;
 
       const response = await fetch(`${BACKEND_URL}/api/chat`, {
@@ -503,11 +506,12 @@ export default function App() {
   const maxTokens = parseInt(document.getElementById('setMaxTokens')?.value) || 1024;
   const temperature = parseFloat(document.getElementById('setTemperature')?.value) || 0.7;
   const voiceIdx = parseInt(document.getElementById('setVoice')?.value) || 0;
+  const model = document.getElementById('setModel')?.value || 'doubao';
   const scale = parseFloat(document.getElementById('setScale')?.value) || 1;
   const size = parseInt(document.getElementById('setFontSize')?.value) || 15;
 
   // 更新本地状态
-  setAgentConfig(prev => ({ ...prev, name, prompt, autoSpeak, maxTokens, temperature, voiceIndex: voiceIdx }));
+  setAgentConfig(prev => ({ ...prev, name, prompt, autoSpeak, maxTokens, temperature, voiceIndex: voiceIdx, model }));
   setUiScale(scale);
   setFontSize(size);
 
@@ -661,6 +665,13 @@ export default function App() {
             <div className="modal-field"><label>语音选择</label><select id="setVoice" defaultValue={agentConfig.voiceIndex}>
               {voices.map((v, i) => <option key={i} value={i}>{v.name} ({v.lang})</option>)}
             </select></div>
+                        <div className="modal-field">
+              <label>AI 模型</label>
+              <select id="setModel" defaultValue={agentConfig.model || 'doubao'}>
+                <option value="doubao">豆包（默认）</option>
+                <option value="deepseek">DeepSeek</option>
+              </select>
+            </div>
             <div className="modal-field"><label><input type="checkbox" id="setAutoSpeak" defaultChecked={agentConfig.autoSpeak} /> 自动朗读AI回复</label></div>
             <div className="modal-field"><label>最大回复长度 (tokens)</label><input type="number" id="setMaxTokens" defaultValue={agentConfig.maxTokens} /></div>
             <div className="modal-field"><label>温度 <span id="tempVal">{agentConfig.temperature}</span></label><input type="range" id="setTemperature" min="0" max="1" step="0.05" defaultValue={agentConfig.temperature} onChange={(e) => document.getElementById('tempVal').textContent = e.target.value} /></div>
