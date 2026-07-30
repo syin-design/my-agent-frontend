@@ -228,7 +228,8 @@ export default function App() {
         const formatted = data.messages.map(m => ({
           role: m.role,
           content: m.content,
-          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          dbId: m.id
         }));
         setConversations(prev => ({
           ...prev,
@@ -310,7 +311,7 @@ export default function App() {
   };
 
       // ========== 发送消息（调用后端，流式接收）==========
-  const sendMessage = async (text = null) => {
+  const sendMessage = async (text = null, options = {}) => {
     const inputText = text || document.getElementById('userInput')?.value.trim();
     if (!inputText || isTyping) return;
     document.getElementById('userInput').value = '';
@@ -326,7 +327,9 @@ export default function App() {
     try {
       const body = {
   message: inputText,
-  model: agentConfig.model || 'doubao'   // 新增：默认豆包
+  model: agentConfig.model || 'doubao',
+  regenerate: options.regenerate || false,
+  truncateAfterId: options.truncateAfterId || null
 };
       if (currentChatId) body.sessionId = currentChatId;
 
@@ -405,7 +408,7 @@ export default function App() {
       c.messages = c.messages.slice(0, -1);
       return { ...prev, [currentChatId]: c };
     });
-    await sendMessage(lastUserMsg.content);
+    await sendMessage(lastUserMsg.content, { regenerate: true });
   };
 
   const handleEdit = (msg) => {
@@ -425,7 +428,7 @@ export default function App() {
       return { ...prev, [currentChatId]: c };
     });
     setEditMsg(null);
-    await sendMessage(editText.trim());
+    await sendMessage(editText.trim(), { truncateAfterId: editMsg.dbId || null });
   };
 
   const deleteChat = async (id) => {
@@ -618,6 +621,20 @@ export default function App() {
                   <span onClick={() => speak(msg.content)}>🔊</span>
                   <span onClick={regenerate}>🔄</span>
                   <span onClick={() => { navigator.clipboard.writeText(msg.content); showToast('已复制'); }}>📋</span>
+                  <span onClick={() => {
+  if (!currentChatId) return;
+  fetch(`${BACKEND_URL}/api/good-examples`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: currentChatId, aiContent: msg.content })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) showToast('👍 已标记为优秀示例');
+    else showToast('⚠️ 标记失败');
+  })
+  .catch(() => showToast('⚠️ 网络错误'));
+}}>👍</span>
                 </div>
               )}
             </div>
