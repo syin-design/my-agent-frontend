@@ -425,7 +425,8 @@ export default function App() {
     const aiMsg = { role: 'ai', content: '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
     setConversations(prev => {
       const chat = prev[currentChatId || 'temp'] || { messages: [], history: [] };
-      return { ...prev, [currentChatId || 'temp']: { ...chat, messages: [...chat.messages, aiMsg] } };
+      const messagesWithoutOldReply = chat.messages.slice(0, -1); // 去掉最后一条旧的AI回复
+      return { ...prev, [currentChatId || 'temp']: { ...chat, messages: [...messagesWithoutOldReply, aiMsg] } };
     });
 
     // 流式读取新回复
