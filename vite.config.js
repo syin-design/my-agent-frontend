@@ -1,15 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { viteSingleFile } from 'vite-plugin-singlefile'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), viteSingleFile()],
   build: {
-    target: 'es2015',
-    rollupOptions: {
-      output: {
-        format: 'iife',
-        entryFileNames: 'assets/app.js',
-      }
-    }
+    target: 'es2015'
   }
 })
