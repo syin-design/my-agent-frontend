@@ -182,12 +182,21 @@ export default function App() {
   // 声音
   const [voices, setVoices] = useState([]);
   useEffect(() => {
+    // 如果浏览器不支持语音合成，直接跳过，不报错
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
     const loadVoices = () => {
-      const v = speechSynthesis.getVoices();
-      if (v.length) setVoices(v);
+      try {
+        const v = window.speechSynthesis.getVoices();
+        if (v.length) setVoices(v);
+      } catch (e) {
+        // 忽略错误
+      }
     };
     loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }, []);
 
   // 持久化
@@ -297,10 +306,16 @@ export default function App() {
     source.start();
   } catch (e) {
     console.error('语音播放失败:', e);
-    // 兜底：浏览器自带语音
-    const u = new SpeechSynthesisUtterance(text);
-    if (voices[agentConfig.voiceIndex]) u.voice = voices[agentConfig.voiceIndex];
-    speechSynthesis.speak(u);
+    // 兜底：浏览器自带语音（仅在支持时使用）
+    if (typeof window !== 'undefined' && window.speechSynthesis && window.SpeechSynthesisUtterance) {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        if (voices[agentConfig.voiceIndex]) u.voice = voices[agentConfig.voiceIndex];
+        window.speechSynthesis.speak(u);
+      } catch (err) {
+        // 静默失败，不影响使用
+      }
+    }
   }
 };
 
