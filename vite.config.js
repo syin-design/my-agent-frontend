@@ -1,10 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { viteSingleFile } from 'vite-plugin-singlefile'
+import legacy from '@vitejs/plugin-legacy'
 
 export default defineConfig({
-  plugins: [react(), viteSingleFile()],
+  plugins: [
+    react(),
+    legacy({
+      targets: ['defaults', 'not IE 11', 'Android >= 5', 'iOS >= 10'],
+      additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
+      renderLegacyChunks: true,
+      polyfills: true,
+    }),
+  ],
   build: {
-    target: 'es2015'
-  }
+    target: 'es2015',
+    modulePreload: false,
+  },
 })
